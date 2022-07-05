@@ -2,6 +2,15 @@ const canvas = document.querySelector('#canvas');
 const ctx = canvas.getContext('2d');
 const input = document.querySelector('#input');
 
+input.value = `1
+-11
+-12
+--21
+---31
+---32
+-13
+--231`
+
 class Node {
     constructor(text, children = []) {
         this.text = text;
@@ -18,110 +27,148 @@ class Destination {
 
 const MindMap = {
     mindMap: null,
-    depth: 0,
 
 
     insertDestination(dest) {
         // if empty insert first
         if(!this.mindMap) {
             this.mindMap = new Node(dest.text);
-            this.depth++;
             return;
         };
 
         let currentDest = this.mindMap;
-        let currentDepth = 0;
+        let currentStep = 0;
+        console.log(currentDest.children);
 
-        while(currentDepth < dest.depth) {
-            current = currentDest.children;
+        dest.path.forEach((step) => {
+            let exist = currentDest.children[step];
+            console.log(exist)
+            if(!exist) {
+                currentDest.children.push(new Node(dest.text));
+                
+            }
+            currentDest = currentDest.children[step];
+        });
 
-            currentDepth++;
-        };
+        // currentDest.children.push(new Node(dest.text));
+        
+        // dest.path.forEach(step => {
+        //     console.log(currentDest.children);
+        //     const nodeExist = currentDest.children.some(child => {
+        //         return child.id === step.id;
+        //     });
+        //     if(!nodeExist) {
+        //         currentDest.children.push(new Node(dest.text, dest.id));
+        //     };
+        //     currentDest = currentDest.children[step];
+        // });
 
-        currentDest.children.push(new Node(dest.text));
-        this.depth++;
     },
 
     parseText(inputText) {
         const lines = inputText.split('\n');
-        const result = [];
-
-        const getDestDepth = (line) => {
-            let depth = 0
+        const linesArr = lines.map(line => {
+            //get depth
+            let depthCount = 0;
             let text = line;
-
-            //calc depth
             while(text[0] === '-') {
                 text = text.split('').slice(1).join('');
-                depth++;
+                depthCount++;
             };
-            return depth;
-        }
-
-        const findParent = (currentLine, index) => {
-            const linesAbove = JSON.parse(JSON.stringify(lines));
-            linesAbove.length = index + 1;
-            const reversed = linesAbove.reverse();
-
-            const result = reversed.find(line => {
-                return getDestDepth(line) === getDestDepth(currentLine) - 1;
-            })
-            return result;
-        }
-
-        console.log(findParent(lines[2], 2))
-
-        lines.forEach((line, i) => {
-            let found = 0;
-            const res = [];
-            do {
-                found = findParent(line, i);
-                if(found) {
-                    res.push(found);
-                }
-            } while(found);
-
-            result.push(res);
-            console.log(res)
+            return { 
+                text: text, 
+                depth: depthCount, 
+                id: Date.now() + Math.random() 
+            };
         });
-        console.log(result);
 
-        // const parsedLines = lines.map(line => {
-        //     if(line[0] !== '-') {
-        //         return new Destination(line, 0);
-        //     };
+        //find own parent
+        const findOwnParent = (index) => {
+            let parent;
+            const linesArrCopy = [...linesArr];
+            linesArrCopy.length = index + 1;
 
-        //     let depthCount = 0
-        //     let indexCount = 0
-        //     let text = line;
+            const reversedLinesArrCopy = [...linesArrCopy];
+            reversedLinesArrCopy.reverse();
 
-        //     //calc depth
-        //     while(text[0] === '-') {
-        //         text = text.split('').slice(1).join('');
-        //         depthCount++;
-        //     };
+            parent = reversedLinesArrCopy.find(line => {
+                return line.depth === linesArrCopy[index].depth - 1;
+            });
 
-        //     //calc index
-        //     depthTrack.forEach(depth => {
-        //         if(depth === depthCount) {
-        //             indexCount++;
-        //         };
-        //     });
-        //     depthTrack.push(depthCount);
+            return parent;
+        };
 
-        //     return new Destination(text, depthCount, indexCount);
-        // });
+        //find next parent
+        const findNextParent = (index) => {
+            let parent;
+            parent = linesArr.find((line, i) => {
+                return (i > index) && (line.depth < linesArr[index].depth);
+            });
 
-        // return parsedLines;
+            return parent;
+        };
+        
+        //find siblings
+        const findSiblings = (index) => {
+            let siblings;
+            const ownParent = findOwnParent(index);
+            const nextParent = findNextParent(index);
+            const ownParentIndex = () => {
+                if(!ownParent) { return 0 };
+                return linesArr.findIndex(line => {
+                    return line.id === ownParent.id;
+                });
+            };
+            const nextParentIndex = () => {
+                if(!nextParent) { return linesArr.length };
+                return linesArr.findIndex(line => {
+                    return line.id === nextParent.id;
+                });    
+            };
+
+            siblings = linesArr.filter((line, i) => {
+                return (i > ownParentIndex()) && (i < nextParentIndex()) && (line.depth === linesArr[index].depth);
+            });
+
+            return siblings;
+        };
+
+
+        //find path
+        const findPath = (index) => {
+            const path = [];
+            let currentIndex = index;
+
+            while(currentIndex) {
+                const siblings = findSiblings(currentIndex);
+                const stepIndex = siblings.findIndex(sibling => {
+                    return sibling.id === linesArr[currentIndex].id;
+                });
+                path.push(stepIndex);
+                const parent = findOwnParent(currentIndex);
+                const parentIndex = linesArr.findIndex(line => {
+                    return line.id === parent.id;
+                });
+                currentIndex = parentIndex;
+            };
+
+            return path;
+        };
+
+        const parsedText = linesArr.map((line, i) => {
+            return { ...line, path: findPath(i) };
+        });
+
+        console.log(parsedText)
+        return parsedText;
     },
 
     initMindMap(inputText) {
-        this.parseText(inputText);
-        // const parsedLines = this.parseText(inputText);
-        // parsedLines.forEach(dest => {
-        //     this.insertDestination(dest);
-        // })
-        // console.log(this.mindMap);
+        const arr = this.parseText(inputText);
+        arr.forEach(line => {
+            this.insertDestination(line);
+        });
+        console.log(this.mindMap);
     }
 }
 
